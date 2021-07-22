@@ -116,7 +116,7 @@ pub contract ColdStorage {
 
   pub resource Vault : FungibleToken.Receiver, PublicVault {    
     access(self) var address: Address
-    // access(self) var keyList: Crypto.KeyList
+    access(self) var keyList: Crypto.KeyList
     access(self) var contents: @FungibleToken.Vault
     access(self) var seqNo: UInt64
 
@@ -133,8 +133,7 @@ pub contract ColdStorage {
     }
 
     pub fun getKeys(): Crypto.KeyList {
-      return Crypto.KeyList()
-      // return self.keyList
+      return self.keyList
     }
 
     pub fun prepareWithdrawal(request: WithdrawRequest): @PendingWithdrawal {
@@ -160,7 +159,7 @@ pub contract ColdStorage {
 
       self.incrementSequenceNumber()
 
-      // self.keyList = request.newKeyList
+      self.keyList = request.newKeyList
     } 
 
     access(self) fun incrementSequenceNumber(){
@@ -173,17 +172,15 @@ pub contract ColdStorage {
         self.address == request.address
       }
 
-      return true
-
-      // return ColdStorage.validateSignature(
-      //   keyList: self.keyList,
-      //   signatureSet: request.sigSet,
-      //   message: request.signableBytes()
-      // )
+      return ColdStorage.validateSignature(
+        keyList: self.keyList,
+        signatureSet: request.sigSet,
+        message: request.signableBytes()
+      )
     }
 
     init(address: Address, keyList: Crypto.KeyList, contents: @FungibleToken.Vault) {
-      // self.keyList = keyList
+      self.keyList = keyList
       self.seqNo = UInt64(0)
       self.contents <- contents
       self.address = address
