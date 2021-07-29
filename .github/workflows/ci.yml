@@ -21,5 +21,6 @@ jobs:
         uses: actions/setup-node@v2
         with:
           node-version: 15.x
+      - run: sh -ci "$(curl -fsSL https://storage.googleapis.com/flow-cli/install.sh)"
       - run: npm ci
       - run: npm test
