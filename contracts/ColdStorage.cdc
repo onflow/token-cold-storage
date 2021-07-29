@@ -5,10 +5,30 @@ import FlowToken from "./FlowToken.cdc"
 
 pub contract ColdStorage {
 
+  // TODO: Remove Key struct once KeyList is storable
+  pub struct Key {
+    pub let publicKey: String
+    // pub let signatureAlgorithm: SignatureAlgorithm
+    // pub let hashAlgorithm: HashAlgorithm
+    pub let weight: UFix64
+
+    init(
+      publicKey: String, 
+      // signatureAlgorithm: SignatureAlgorithm, 
+      // hashAlgorithm: HashAlgorithm, 
+      weight: UFix64,
+    ) {
+      self.publicKey = publicKey
+      // self.signatureAlgorithm = signatureAlgorithm
+      // self.hashAlgorithm = hashAlgorithm
+      self.weight = weight
+    }
+  }
+
   pub struct interface ColdStorageRequest {
     pub var sigSet: [Crypto.KeyListSignature]
     pub var seqNo: UInt64
-    pub var address: Address
+    pub var senderAddress: Address
 
     pub fun signableBytes(): [UInt8]
   }
@@ -16,57 +36,57 @@ pub contract ColdStorage {
   pub struct WithdrawRequest: ColdStorageRequest {
     pub var sigSet: [Crypto.KeyListSignature]
     pub var seqNo: UInt64
-    pub var address: Address
 
-    pub var toAddress: Address
+    pub var senderAddress: Address
+    pub var recipientAddress: Address
     pub var amount: UFix64
 
     init(
+      senderAddress: Address,
+      recipientAddress: Address,  
       amount: UFix64, 
-      toAddress: Address, 
       seqNo: UInt64, 
-      fromAddress: Address, 
       sigSet: [Crypto.KeyListSignature],
     ) {
+      self.senderAddress = senderAddress
+      self.recipientAddress = recipientAddress
       self.amount = amount
-      self.toAddress = toAddress
 
       self.seqNo = seqNo
-      self.address = fromAddress
       self.sigSet = sigSet
     }
 
     pub fun signableBytes(): [UInt8] {
-      let toAddressBytes = self.toAddress.toBytes()
+      let senderAddress = self.senderAddress.toBytes()
+      let recipientAddressBytes = self.recipientAddress.toBytes()
       let amountBytes = self.amount.toBigEndianBytes()
-      let addressBytes = self.address.toBytes()
       let seqNoBytes = self.seqNo.toBigEndianBytes()
 
-      return toAddressBytes.concat(amountBytes).concat(addressBytes).concat(seqNoBytes)
+      return senderAddress.concat(recipientAddressBytes).concat(amountBytes).concat(seqNoBytes)
     }
   }
 
   pub struct KeyListChangeRequest: ColdStorageRequest {
     pub var sigSet: [Crypto.KeyListSignature]
     pub var seqNo: UInt64
-    pub var address: Address
+    pub var senderAddress: Address
 
-    pub var newKeyList: Crypto.KeyList
+    pub var newKeys: [Key]
 
     init(
-      newKeyList: Crypto.KeyList,
+      newKeys: [Key],
       seqNo: UInt64,
-      address: Address,
+      senderAddress: Address,
       sigSet: [Crypto.KeyListSignature],
     ) {
-      self.newKeyList = newKeyList
+      self.newKeys = newKeys
       self.seqNo = seqNo
-      self.address = address
+      self.senderAddress = senderAddress
       self.sigSet = sigSet
     }
 
     pub fun signableBytes(): [UInt8] {
-      // TODO: construct byte array from newKeyList, address, seqNo
+      // TODO: construct byte array from newKeys, senderAddress, seqNo
       return [0x01]
     }
   }
@@ -85,7 +105,7 @@ pub contract ColdStorage {
       var pendingVault <- FlowToken.createEmptyVault()
       self.pendingVault <-> pendingVault
 
-      let recipient = getAccount(self.request.toAddress)
+      let recipient = getAccount(self.request.recipientAddress)
       let receiver = recipient
         .getCapability(fungibleTokenReceiverPath)!
         .borrow<&{FungibleToken.Receiver}>()
@@ -107,7 +127,7 @@ pub contract ColdStorage {
 
     pub fun getBalance(): UFix64
 
-    pub fun getKeys(): Crypto.KeyList
+    pub fun getKeys(): [Key]
 
     pub fun prepareWithdrawal(request: WithdrawRequest): @PendingWithdrawal
 
@@ -116,7 +136,7 @@ pub contract ColdStorage {
 
   pub resource Vault : FungibleToken.Receiver, PublicVault {    
     access(self) var address: Address
-    access(self) var keyList: Crypto.KeyList
+    access(self) var keys: [Key]
     access(self) var contents: @FungibleToken.Vault
     access(self) var seqNo: UInt64
 
@@ -132,8 +152,8 @@ pub contract ColdStorage {
       return self.contents.balance
     }
 
-    pub fun getKeys(): Crypto.KeyList {
-      return self.keyList
+    pub fun getKeys(): [Key] {
+      return self.keys
     }
 
     pub fun prepareWithdrawal(request: WithdrawRequest): @PendingWithdrawal {
@@ -159,7 +179,7 @@ pub contract ColdStorage {
 
       self.incrementSequenceNumber()
 
-      self.keyList = request.newKeyList
+      self.keys = request.newKeys
     } 
 
     access(self) fun incrementSequenceNumber(){
@@ -169,18 +189,18 @@ pub contract ColdStorage {
     access(self) fun isValidSignature(request: {ColdStorage.ColdStorageRequest}): Bool {
       pre {
         self.seqNo == request.seqNo 
-        self.address == request.address
+        self.address == request.senderAddress
       }
 
       return ColdStorage.validateSignature(
-        keyList: self.keyList,
+        keys: self.keys,
         signatureSet: request.sigSet,
         message: request.signableBytes()
       )
     }
 
-    init(address: Address, keyList: Crypto.KeyList, contents: @FungibleToken.Vault) {
-      self.keyList = keyList
+    init(address: Address, keys: [Key], contents: @FungibleToken.Vault) {
+      self.keys = keys
       self.seqNo = UInt64(0)
       self.contents <- contents
       self.address = address
@@ -193,20 +213,35 @@ pub contract ColdStorage {
 
   pub fun createVault(
     address: Address, 
-    keyList: Crypto.KeyList, 
+    keys: [Key], 
     contents: @FungibleToken.Vault,
   ): @Vault {
-    return <- create Vault(address: address, keyList: keyList, contents: <- contents)
+    return <- create Vault(address: address, keys: keys, contents: <- contents)
   }
 
   pub fun validateSignature(
-    keyList: Crypto.KeyList,
+    keys: [Key],
     signatureSet: [Crypto.KeyListSignature],
     message: [UInt8],
   ): Bool {
+
+    // TODO: Remove Key struct once KeyList is storable
+    let keyList = Crypto.KeyList()
+
+    for key in keys {
+      keyList.add(
+        PublicKey(
+          publicKey: key.publicKey.decodeHex(),
+          signatureAlgorithm: SignatureAlgorithm.ECDSA_P256,
+        ),
+        hashAlgorithm: HashAlgorithm.SHA3_256,
+        weight: key.weight,
+      )
+    }
+
     return keyList.verify(
-        signatureSet: signatureSet,
-        signedData: message
+      signatureSet: signatureSet,
+      signedData: message
     )
   }
 }

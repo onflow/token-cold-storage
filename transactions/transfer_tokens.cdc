@@ -2,21 +2,16 @@ import Crypto
 
 import ColdStorage from "../contracts/ColdStorage.cdc"
 
-transaction(
-  amount: UFix64, 
-  to: Address, 
-  seqNo: UInt64, 
-  senderAddress: Address, 
-  signatureA: String,
-  signatureB: String,
-) {
+transaction(senderAddress: Address, recipientAddress: Address, amount: UFix64, seqNo: UInt64, signatureA: String, signatureB: String) {
+
   let pendingWithdrawal: @ColdStorage.PendingWithdrawal
 
-  prepare() {
+  prepare(signer: AuthAccount) {
     let sender = getAccount(senderAddress)
 
-    let storedVaultCapability = sender.getCapability(/public/flowTokenColdStorage) ?? panic("Unable to borrow a reference to the sender's Vault")
-    let storedVault =  storedVaultCapability.borrow<&{ColdStorage.PublicVault}>() ?? panic("Vault is not a ColdStorage PublicVault")
+    let publicVault = sender
+      .getCapability(/public/flowTokenColdStorage)!
+      .borrow<&ColdStorage.Vault{ColdStorage.PublicVault}>()!
 
     let signatureSet = [
       Crypto.KeyListSignature(
@@ -25,23 +20,23 @@ transaction(
       ),
       Crypto.KeyListSignature(
         keyIndex: 1,
-        signature: signatureA.decodeHex()
+        signature: signatureB.decodeHex()
       )
     ]
 
     let request = ColdStorage.WithdrawRequest(
+      senderAddress: senderAddress, 
+      recipientAddress: recipientAddress, 
       amount: amount, 
-      toAddress: toAddress, 
       seqNo: seqNo, 
-      address: senderAddress, 
       sigSet: signatureSet,
     )
     
-    self.pendingWithdrawal <- storedVault.prepareWithdrawal(request: request)
+    self.pendingWithdrawal <- publicVault.prepareWithdrawal(request: request)
   }
 
   execute {
-    self.pendingWithdrawal.execute(fungibleTokenRecieverPath: /public/flowTokenReceiver)
+    self.pendingWithdrawal.execute(fungibleTokenReceiverPath: /public/flowTokenReceiver)
     destroy self.pendingWithdrawal
   }
 }

@@ -1,4 +1,4 @@
-import { deployContractByName, mintFlow, sendTransaction } from "flow-js-testing";
+import { deployContractByName, mintFlow, sendTransaction, executeScript } from "flow-js-testing";
 import { getAccountA } from "./common";
 
 export const deployColdStorage = async () => {
@@ -16,10 +16,16 @@ export const setupColdStorageVault = async (account, publicKeyA, publicKeyB) => 
   return sendTransaction({ name, args, signers });
 };
 
-export const transferTokens = async (sender, recipient, amount, seqNo, signatures) => {
+export const transferTokens = async (sender, recipient, amount, seqNo, signatureA, signatureB) => {
   const name = "transfer_tokens";
-  const args = [amount, recipient, seqNo, sender, signatures];
-  const signers = [sender];
+  const args = [sender, recipient, amount, seqNo, signatureA, signatureB];
 
-  return sendTransaction({ name, args, signers });
+  return sendTransaction({ name, args });
+};
+
+export const getBalance = async (account) => {
+	const name = "get_balance";
+	const args = [account];
+
+	return executeScript({ name, args });
 };
