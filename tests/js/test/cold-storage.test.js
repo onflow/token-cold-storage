@@ -9,8 +9,6 @@ import {
   getFlowBalance,
 } from "flow-js-testing";
 
-import leftPad from "left-pad";
-
 import {
   deployColdStorage,
   setupColdStorageVault,
@@ -42,7 +40,7 @@ const userDomainTag = Buffer.from("464c4f572d56302e302d7573657200000000000000000
 
 function toBigEndianBytes(number, bits) {
   return Buffer.from(
-    leftPad(BigInt(number).toString(16), bits / 4, "0"),
+    BigInt(number).toString(16).padStart(bits / 4, "0"),
     "hex",
   )
 }
