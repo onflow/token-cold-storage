@@ -1,3 +1,5 @@
+import Crypto
+
 import FungibleToken from "./FungibleToken.cdc"
 import FlowToken from "./FlowToken.cdc"
 import ColdStorage from "../contracts/ColdStorage.cdc"
@@ -7,20 +9,25 @@ transaction(publicKeyA: String, publicKeyB: String) {
 
     let flowVault <- FlowToken.createEmptyVault()
 
-    let keys = [
-      ColdStorage.Key(
-        publicKey: publicKeyA,
-        // signatureAlgorithm: SignatureAlgorithm.ECDSA_P256,
-        // hashAlgorithm: HashAlgorithm.SHA3_256,
-        weight: 0.5
+    let keys = Crypto.KeyList()
+
+    keys.add(
+      PublicKey(
+        publicKey: publicKeyA.decodeHex(),
+        signatureAlgorithm: SignatureAlgorithm.ECDSA_P256,
       ),
-      ColdStorage.Key(
-        publicKey: publicKeyB,
-        // signatureAlgorithm: SignatureAlgorithm.ECDSA_P256,
-        // hashAlgorithm: HashAlgorithm.SHA3_256,
-        weight: 0.5
-      )
-    ]
+      hashAlgorithm: HashAlgorithm.SHA3_256,
+      weight: 0.5,
+    )
+
+    keys.add(
+      PublicKey(
+        publicKey: publicKeyB.decodeHex(),
+        signatureAlgorithm: SignatureAlgorithm.ECDSA_P256,
+      ),
+      hashAlgorithm: HashAlgorithm.SHA3_256,
+      weight: 0.5,
+    )
     
     let coldVault <- ColdStorage.createVault(
       address: account.address, 

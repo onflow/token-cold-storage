@@ -5,26 +5,6 @@ import FlowToken from "./FlowToken.cdc"
 
 pub contract ColdStorage {
 
-  // TODO: Remove Key struct once KeyList is storable
-  pub struct Key {
-    pub let publicKey: String
-    // pub let signatureAlgorithm: SignatureAlgorithm
-    // pub let hashAlgorithm: HashAlgorithm
-    pub let weight: UFix64
-
-    init(
-      publicKey: String, 
-      // signatureAlgorithm: SignatureAlgorithm, 
-      // hashAlgorithm: HashAlgorithm, 
-      weight: UFix64,
-    ) {
-      self.publicKey = publicKey
-      // self.signatureAlgorithm = signatureAlgorithm
-      // self.hashAlgorithm = hashAlgorithm
-      self.weight = weight
-    }
-  }
-
   pub struct interface ColdStorageRequest {
     pub var sigSet: [Crypto.KeyListSignature]
     pub var seqNo: UInt64
@@ -71,10 +51,10 @@ pub contract ColdStorage {
     pub var seqNo: UInt64
     pub var senderAddress: Address
 
-    pub var newKeys: [Key]
+    pub var newKeys: Crypto.KeyList
 
     init(
-      newKeys: [Key],
+      newKeys: Crypto.KeyList,
       seqNo: UInt64,
       senderAddress: Address,
       sigSet: [Crypto.KeyListSignature],
@@ -127,7 +107,7 @@ pub contract ColdStorage {
 
     pub fun getBalance(): UFix64
 
-    pub fun getKeys(): [Key]
+    pub fun getKeys(): Crypto.KeyList
 
     pub fun prepareWithdrawal(request: WithdrawRequest): @PendingWithdrawal
 
@@ -136,7 +116,7 @@ pub contract ColdStorage {
 
   pub resource Vault : FungibleToken.Receiver, PublicVault {    
     access(self) var address: Address
-    access(self) var keys: [Key]
+    access(self) var keys: Crypto.KeyList
     access(self) var contents: @FungibleToken.Vault
     access(self) var seqNo: UInt64
 
@@ -152,7 +132,7 @@ pub contract ColdStorage {
       return self.contents.balance
     }
 
-    pub fun getKeys(): [Key] {
+    pub fun getKeys(): Crypto.KeyList {
       return self.keys
     }
 
@@ -199,7 +179,7 @@ pub contract ColdStorage {
       )
     }
 
-    init(address: Address, keys: [Key], contents: @FungibleToken.Vault) {
+    init(address: Address, keys: Crypto.KeyList, contents: @FungibleToken.Vault) {
       self.keys = keys
       self.seqNo = UInt64(0)
       self.contents <- contents
@@ -213,33 +193,18 @@ pub contract ColdStorage {
 
   pub fun createVault(
     address: Address, 
-    keys: [Key], 
+    keys: Crypto.KeyList, 
     contents: @FungibleToken.Vault,
   ): @Vault {
     return <- create Vault(address: address, keys: keys, contents: <- contents)
   }
 
   pub fun validateSignature(
-    keys: [Key],
+    keys: Crypto.KeyList,
     signatureSet: [Crypto.KeyListSignature],
     message: [UInt8],
   ): Bool {
-
-    // TODO: Remove Key struct once KeyList is storable
-    let keyList = Crypto.KeyList()
-
-    for key in keys {
-      keyList.add(
-        PublicKey(
-          publicKey: key.publicKey.decodeHex(),
-          signatureAlgorithm: SignatureAlgorithm.ECDSA_P256,
-        ),
-        hashAlgorithm: HashAlgorithm.SHA3_256,
-        weight: key.weight,
-      )
-    }
-
-    return keyList.verify(
+    return keys.verify(
       signatureSet: signatureSet,
       signedData: message
     )
